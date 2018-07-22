@@ -1,4 +1,7 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module System.Hardware.Streamdeck ( Deck
+                                  , serialNumber
                                   , solidRGB
                                   , openStreamDeck
                                   , enumerateStreamDecks
@@ -8,6 +11,8 @@ module System.Hardware.Streamdeck ( Deck
                                   , writeImage
                                   , sendRaw
                                   ) where
+
+import Data.Maybe (fromMaybe)
 
 import qualified Data.Bits            as B
 import qualified Data.ByteString      as BS
@@ -199,3 +204,9 @@ updateDeck d f =
     in do
     _ <- drawPage newDeck
     return newDeck
+
+-- KNOWN BUG: some versions of the Stream Deck firmware do not report
+-- SerialNumber as part of the HID handshake (but can be coerced to report the
+-- S/N via special request).  Leaving this bug for another day.
+serialNumber :: HID.DeviceInfo -> String
+serialNumber = show . fromMaybe "" . HID.serialNumber
