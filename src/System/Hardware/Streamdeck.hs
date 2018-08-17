@@ -196,12 +196,12 @@ determineSN info dev = case HID.serialNumber info of
 requestSN :: HID.Device -> IO BS.ByteString
 requestSN dev = do
     sn <- HID.getFeatureReport dev 3 17
-    return $ BS.takeWhile (/= 0) $ BS.drop 5 sn
+    return $ BS.takeWhile (/= 0) $ BS.drop 5 $ snd sn
 
 requestFW :: HID.Device -> IO BS.ByteString
 requestFW dev = do
     fw <- HID.getFeatureReport dev 4 17
-    return $ BS.takeWhile (/= 0) $ BS.drop 5 fw
+    return $ BS.takeWhile (/= 0) $ BS.drop 5 $ snd fw
 
 drawRow :: Deck -> DW.Word8 -> Row -> IO ()
 drawRow d r (Row (i0, i1, i2, i3, i4)) = do

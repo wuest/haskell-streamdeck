@@ -28,6 +28,6 @@ library
     exposed-modules:     System.Hardware.Streamdeck
     build-depends:
           base       >= 4.9   && < 4.12
-        , hidapi     >= 0.1.4 && < 0.2
+        , hidapi     >= 0.1.5 && < 0.2
         , bytestring >= 0.10  && < 0.11
         , mtl        >= 2.2   && < 2.3
