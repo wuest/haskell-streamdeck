@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module System.Hardware.Streamdeck ( Deck
-                                  , serialNumber
+module System.Hardware.Streamdeck ( Deck ( serialNumber
+                                         , firmware
+                                         )
                                   , solidRGB
                                   , openStreamDeck
                                   , enumerateStreamDecks
@@ -12,12 +13,11 @@ module System.Hardware.Streamdeck ( Deck
                                   , sendRaw
                                   ) where
 
-import Data.Maybe (fromMaybe)
-
-import qualified Data.Bits            as B
-import qualified Data.ByteString      as BS
-import qualified Data.Word            as DW   (Word16, Word8)
-import qualified System.HIDAPI        as HID
+import qualified Data.Bits             as B
+import qualified Data.ByteString       as BS
+import qualified Data.ByteString.Char8 as BSC (pack)
+import qualified Data.Word             as DW   (Word16, Word8)
+import qualified System.HIDAPI         as HID
 
 import Prelude
 
@@ -33,8 +33,10 @@ type PixelR = DW.Word8
 type PixelG = DW.Word8
 type PixelB = DW.Word8
 
-data Deck = Deck { ref       :: HID.Device
-                 , display   :: Page
+data Deck = Deck { _ref         :: HID.Device
+                 , serialNumber :: BS.ByteString
+                 , firmware     :: BS.ByteString
+                 , display      :: Page
                  }
 
 vendorID :: DW.Word16
@@ -95,10 +97,10 @@ setBrightness' b = BS.pack [ 0x05                   -- Report 0x05
 sendRaw :: Deck -> BS.ByteString -> IO ()
 sendRaw deck bs =
     if BS.length bs > packetSize then
-        (do _ <- HID.write (ref deck) $ BS.take packetSize bs
+        (do _ <- HID.write (_ref deck) $ BS.take packetSize bs
             sendRaw deck $ fixContinuationPacket bs)
     else
-        (do _ <- HID.write (ref deck) bs
+        (do _ <- HID.write (_ref deck) bs
             return ())
 
 -- In cases where the first byte of a continuation packet is unset, the byte is
@@ -132,7 +134,7 @@ page 2 i = BS.pack [ 0x02, 0x01, 0x02, 0x00, 0x01,  i+1, 0x00, 0x00
 page _ _ = BS.pack []
 
 read :: Deck -> Int -> IO BS.ByteString
-read deck = HID.read (ref deck)
+read deck = HID.read (_ref deck)
 
 -- Stream Deck reports button state ONLY upon button press/release
 -- Stream Deck will send a 16 byte message, with the following format:
@@ -177,9 +179,29 @@ enumerateStreamDecks = HID.enumerate (Just vendorID) (Just productID)
 openStreamDeck :: HID.DeviceInfo -> IO Deck
 openStreamDeck device = HID.withHIDAPI $ do
     deck <- HID.openDeviceInfo device
-    return Deck { ref = deck
+    sn <- determineSN device deck
+    fw <- requestFW deck
+    return Deck { _ref = deck
+                , serialNumber = sn
+                , firmware = fw
                 , display = defaultPage
                 }
+
+determineSN :: HID.DeviceInfo -> HID.Device -> IO BS.ByteString
+determineSN info dev = case HID.serialNumber info of
+    Nothing -> requestSN dev
+    Just "" -> requestSN dev
+    Just sn -> return $ BSC.pack $ show sn
+
+requestSN :: HID.Device -> IO BS.ByteString
+requestSN dev = do
+    sn <- HID.getFeatureReport dev 3 17
+    return $ BS.takeWhile (/= 0) $ BS.drop 5 $ snd sn
+
+requestFW :: HID.Device -> IO BS.ByteString
+requestFW dev = do
+    fw <- HID.getFeatureReport dev 4 17
+    return $ BS.takeWhile (/= 0) $ BS.drop 5 $ snd fw
 
 drawRow :: Deck -> DW.Word8 -> Row -> IO ()
 drawRow d r (Row (i0, i1, i2, i3, i4)) = do
@@ -204,9 +226,3 @@ updateDeck d f =
     in do
     _ <- drawPage newDeck
     return newDeck
-
--- KNOWN BUG: some versions of the Stream Deck firmware do not report
--- SerialNumber as part of the HID handshake (but can be coerced to report the
--- S/N via special request).  Leaving this bug for another day.
-serialNumber :: HID.DeviceInfo -> String
-serialNumber = show . fromMaybe "" . HID.serialNumber
