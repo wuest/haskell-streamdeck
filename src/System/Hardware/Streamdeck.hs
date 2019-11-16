@@ -39,11 +39,18 @@ data Deck = Deck { _ref         :: HID.Device
                  , display      :: Page
                  }
 
-vendorID :: DW.Word16
-vendorID  = 0x0fd9
+data DeckSpec = DeckSpec { name :: String
+                         , productID :: Maybe DW.Word16
+                         }
 
-productID :: DW.Word16
-productID = 0x0060
+deckTypes :: [DeckSpec]
+deckTypes = [ DeckSpec {name = "Stream Deck",      productID = Just 0x0060}
+            , DeckSpec {name = "Stream Deck Mini", productID = Just 0x0063}
+            , DeckSpec {name = "Stream Deck XL",   productID = Just 0x006c}
+            ]
+
+vendorID :: Maybe DW.Word16
+vendorID = Just 0x0fd9
 
 packetSize :: Int
 packetSize = 4096
@@ -174,7 +181,7 @@ writeImage deck button img =
 --            , interfaceNumber = 0
 --            }
 enumerateStreamDecks :: IO [HID.DeviceInfo]
-enumerateStreamDecks = HID.enumerate (Just vendorID) (Just productID)
+enumerateStreamDecks = concat <$> mapM (HID.enumerate vendorID . productID) deckTypes
 
 openStreamDeck :: HID.DeviceInfo -> IO Deck
 openStreamDeck device = HID.withHIDAPI $ do
